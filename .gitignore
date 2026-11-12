@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Xcode / macOS
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+
+# Secrets / local overrides
+WindowsServer/token.txt
+*.ipa
+*.xcarchive
