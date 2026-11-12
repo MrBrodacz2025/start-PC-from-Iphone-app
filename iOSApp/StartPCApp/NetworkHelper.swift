@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-struct NetworkHelper {
+enum NetworkHelper {
     /// Wake-on-LAN – wysyła magic packet UDP na port 9 (broadcast)
     static func sendWOL(mac: String) {
         let cleanMac = mac.replacingOccurrences(of: "[:\\-]", with: "", options: .regularExpression)
@@ -23,13 +23,41 @@ struct NetworkHelper {
         })
     }
 
-    /// Wyłączenie – HTTP POST do serwera Windows
     static func sendShutdown(ip: String, port: UInt16, token: String) {
         guard let url = URL(string: "http://\(ip):\(port)/shutdown") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue(token, forHTTPHeaderField: "X-Auth-Token")
         URLSession.shared.dataTask(with: request).resume()
+    }
+
+    static func checkStatus(ip: String, port: String, token: String) async -> Bool {
+        guard let url = URL(string: "http://\(ip):\(port)/status") else { return false }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 3
+        request.addValue(token, forHTTPHeaderField: "X-Auth-Token")
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
+        } catch {
+            return false
+        }
+    }
+
+    static func fetchTemperatures(ip: String, port: String, token: String) async throws -> TempsResponse {
+        guard let url = URL(string: "http://\(ip):\(port)/temps") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        request.addValue(token, forHTTPHeaderField: "X-Auth-Token")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(TempsResponse.self, from: data)
     }
 }
 

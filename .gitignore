@@ -15,3 +15,5 @@ xcuserdata/
 WindowsServer/token.txt
 *.ipa
 *.xcarchive
+
+build-artifacts/

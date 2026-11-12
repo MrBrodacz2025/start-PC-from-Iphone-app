@@ -15,10 +15,11 @@ jobs:
 
       - name: Set up Xcode
         run: |
-          # Wybierz najnowszy dostępny Xcode 15.x / 16.x na runnerze
-          XCODE=$(ls -d /Applications/Xcode_15*.app /Applications/Xcode_16*.app /Applications/Xcode.app 2>/dev/null | head -n 1)
+          # Preferuj Xcode 26+/27+ (Liquid Glass / iOS 26 SDK)
+          XCODE=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode_26*.app /Applications/Xcode.app 2>/dev/null | head -n 1)
           if [ -z "$XCODE" ]; then
-            echo "Nie znaleziono Xcode"
+            echo "Nie znaleziono Xcode 26+"
+            ls /Applications/Xcode*.app || true
             exit 1
           fi
           sudo xcode-select -s "$XCODE"
