@@ -1,13 +1,14 @@
 import os
 import sys
+import time
 import argparse
+import threading
 from flask import Flask, request, jsonify
 
-from temps import collect_temperatures
+from temps import collect_temperatures, ensure_libre_hardware_monitor
 
 app = Flask(__name__)
 
-# token powinien być podany w zmiennej środowiskowej PC_TOKEN
 TOKEN = os.getenv('PC_TOKEN')
 if not TOKEN:
     print('Error: token not set (PC_TOKEN env variable)')
@@ -37,13 +38,28 @@ def temps():
         payload = collect_temperatures()
         payload['status'] = 'online'
         return jsonify(payload)
-    except Exception as exc:  # noqa: BLE001 – zwracamy błąd do klienta
+    except Exception as exc:  # noqa: BLE001
         return jsonify({
             'status': 'online',
             'sensors': [],
             'count': 0,
+            'metrics': {},
             'error': str(exc),
         }), 200
+
+
+@app.route('/sleep', methods=['POST'])
+def sleep_pc():
+    if not _check_auth():
+        return _unauthorized()
+
+    def _do_sleep():
+        time.sleep(1.2)
+        # 0 = sleep (nie hibernacja), 1 = force, 0 = allow wake events
+        os.system('rundll32.exe powrprof.dll,SetSuspendState 0,1,0')
+
+    threading.Thread(target=_do_sleep, daemon=True).start()
+    return jsonify({'result': 'sleeping'})
 
 
 @app.route('/shutdown', methods=['POST'])
@@ -59,4 +75,9 @@ if __name__ == '__main__':
     parser.add_argument('--host', default='0.0.0.0', help='Interface to bind')
     parser.add_argument('--port', type=int, default=5000, help='Port to listen on')
     args = parser.parse_args()
+    # Podgrzewamy LibreHardwareMonitor przy starcie (CPU/dysk temps)
+    try:
+        ensure_libre_hardware_monitor()
+    except Exception as exc:  # noqa: BLE001
+        print(f'LHM bootstrap: {exc}')
     app.run(host=args.host, port=args.port)

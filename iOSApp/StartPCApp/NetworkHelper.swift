@@ -2,7 +2,6 @@ import Foundation
 import Network
 
 enum NetworkHelper {
-    /// Wake-on-LAN – wysyła magic packet UDP na port 9 (broadcast)
     static func sendWOL(mac: String) {
         let cleanMac = mac.replacingOccurrences(of: "[:\\-]", with: "", options: .regularExpression)
         guard cleanMac.count == 12, let macData = Data(hexString: cleanMac) else { return }
@@ -23,12 +22,20 @@ enum NetworkHelper {
         })
     }
 
-    static func sendShutdown(ip: String, port: UInt16, token: String) {
-        guard let url = URL(string: "http://\(ip):\(port)/shutdown") else { return }
+    static func postAction(path: String, ip: String, port: UInt16, token: String) {
+        guard let url = URL(string: "http://\(ip):\(port)/\(path)") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue(token, forHTTPHeaderField: "X-Auth-Token")
         URLSession.shared.dataTask(with: request).resume()
+    }
+
+    static func sendShutdown(ip: String, port: UInt16, token: String) {
+        postAction(path: "shutdown", ip: ip, port: port, token: token)
+    }
+
+    static func sendSleep(ip: String, port: UInt16, token: String) {
+        postAction(path: "sleep", ip: ip, port: port, token: token)
     }
 
     static func checkStatus(ip: String, port: String, token: String) async -> Bool {
@@ -51,7 +58,7 @@ enum NetworkHelper {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 8
+        request.timeoutInterval = 10
         request.addValue(token, forHTTPHeaderField: "X-Auth-Token")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {

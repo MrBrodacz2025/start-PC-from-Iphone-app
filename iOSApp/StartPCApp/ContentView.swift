@@ -9,8 +9,10 @@ struct ContentView: View {
 
     @State private var isOnline: Bool? = nil
     @State private var showShutdownAlert = false
+    @State private var showSleepAlert = false
     @State private var showSettings = false
     @State private var sensors: [TemperatureSensor] = []
+    @State private var metrics: SystemMetrics?
     @State private var tempsError: String?
     @State private var isLoadingTemps = false
     @State private var refreshTask: Task<Void, Never>?
@@ -24,6 +26,7 @@ struct ContentView: View {
                     VStack(spacing: 18) {
                         headerCard
                         powerCard
+                        MetricsPanel(metrics: metrics)
                         TemperaturePanel(
                             sensors: sensors,
                             isLoading: isLoadingTemps,
@@ -67,6 +70,18 @@ struct ContentView: View {
             } message: {
                 Text("Czy na pewno wyłączyć \(pcName)?")
             }
+            .alert("Uśpij komputer?", isPresented: $showSleepAlert) {
+                Button("Anuluj", role: .cancel) {}
+                Button("Uśpij") {
+                    NetworkHelper.sendSleep(
+                        ip: ipAddress,
+                        port: UInt16(port) ?? 5000,
+                        token: token
+                    )
+                }
+            } message: {
+                Text("\(pcName) przejdzie w tryb uśpienia. Wybudzisz go przyciskiem „Wybudź”.")
+            }
             .task {
                 await refreshAll()
                 startAutoRefresh()
@@ -96,7 +111,11 @@ struct ContentView: View {
                         .foregroundStyle(.white.opacity(0.85))
                 }
 
-                if let hottest = sensors.first {
+                if let cpu = sensors.first(where: { $0.kind == "cpu" }) {
+                    Text("CPU: \(Int(cpu.celsius))°C · \(Int(metrics?.cpu_percent ?? 0))%")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.7))
+                } else if let hottest = sensors.first {
                     Text("Najcieplej: \(hottest.name) · \(Int(hottest.celsius))°C")
                         .font(.footnote)
                         .foregroundStyle(.white.opacity(0.7))
@@ -111,7 +130,7 @@ struct ContentView: View {
                 Button {
                     NetworkHelper.sendWOL(mac: macAddress)
                 } label: {
-                    Label("Włącz komputer", systemImage: "power")
+                    Label("Włącz / Wybudź", systemImage: "sun.max.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                 }
@@ -119,10 +138,21 @@ struct ContentView: View {
                 .disabled(macAddress.isEmpty)
                 .tint(.cyan)
 
+                Button {
+                    showSleepAlert = true
+                } label: {
+                    Label("Uśpij", systemImage: "moon.zzz.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .liquidGlassButton()
+                .disabled(ipAddress.isEmpty || token.isEmpty || isOnline != true)
+                .tint(.indigo)
+
                 Button(role: .destructive) {
                     showShutdownAlert = true
                 } label: {
-                    Label("Wyłącz komputer", systemImage: "power.dotted")
+                    Label("Wyłącz komputer", systemImage: "power")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                 }
@@ -144,7 +174,7 @@ struct ContentView: View {
     private var statusText: String {
         switch isOnline {
         case true: return "Komputer dostępny"
-        case false: return "Komputer niedostępny"
+        case false: return "Komputer niedostępny / uśpiony"
         case nil: return "Brak konfiguracji / sprawdzanie…"
         }
     }
@@ -165,6 +195,7 @@ struct ContentView: View {
         guard !ipAddress.isEmpty else {
             isOnline = nil
             sensors = []
+            metrics = nil
             tempsError = "Uzupełnij IP w ustawieniach."
             return
         }
@@ -177,6 +208,7 @@ struct ContentView: View {
 
         guard isOnline == true else {
             sensors = []
+            metrics = nil
             tempsError = "Brak połączenia z serwerem."
             return
         }
@@ -188,12 +220,16 @@ struct ContentView: View {
                 token: token
             )
             sensors = response.sensors
-            tempsError = response.sensors.isEmpty
-                ? (response.error ?? "Serwer nie zwrócił sensorów.")
-                : nil
+            metrics = response.metrics
+            if response.sensors.isEmpty {
+                tempsError = response.error ?? response.hint ?? "Serwer nie zwrócił sensorów temperatury."
+            } else {
+                tempsError = response.hint
+            }
         } catch {
             sensors = []
-            tempsError = "Nie udało się pobrać temperatur."
+            metrics = nil
+            tempsError = "Nie udało się pobrać danych."
         }
     }
 }
