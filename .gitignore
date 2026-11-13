@@ -17,3 +17,6 @@ WindowsServer/token.txt
 *.xcarchive
 
 build-artifacts/
+
+WindowsServer/tools/
+
