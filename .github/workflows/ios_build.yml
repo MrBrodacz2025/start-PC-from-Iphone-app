@@ -15,15 +15,20 @@ jobs:
 
       - name: Set up Xcode
         run: |
-          # Preferuj Xcode 26+/27+ (Liquid Glass / iOS 26 SDK)
-          XCODE=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode_26*.app /Applications/Xcode.app 2>/dev/null | head -n 1)
+          # Najnowszy Xcode 26+/27+ (np. 26.6 ma SDK; 26.0.1 bywa bez platformy iOS)
+          XCODE=$(ls -d /Applications/Xcode_27*.app /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode.app 2>/dev/null | head -n 1)
+          fi
           if [ -z "$XCODE" ]; then
             echo "Nie znaleziono Xcode 26+"
             ls /Applications/Xcode*.app || true
             exit 1
           fi
+          echo "Using $XCODE"
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
+          xcodebuild -showsdks | grep -i iphone || true
 
       - name: Install dependencies (if any)
         run: |
